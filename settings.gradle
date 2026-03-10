@@ -1,0 +1,9 @@
+rootProject.name = 'health-os'
+
+include 'service-discovery'
+include 'api-gateway'
+include 'ai-service'
+include 'workout-service'
+include 'nutrition-service'
+include 'sleep-service'
+include 'supplement-service'
