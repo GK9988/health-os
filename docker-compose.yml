@@ -1,0 +1,246 @@
+services:
+
+  # ─── Databases ─────────────────────────────────────────────
+
+  postgres:
+    image: postgres:17
+    container_name: postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: healthos
+      POSTGRES_PASSWORD: healthos
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/init-postgres.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - health-os-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U healthos"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  mongo:
+    image: mongo:8
+    container_name: mongo
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: healthos
+      MONGO_INITDB_ROOT_PASSWORD: healthos
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - health-os-net
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ─── Infrastructure ────────────────────────────────────────
+
+  service-discovery:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: service-discovery
+    container_name: service-discovery
+    ports:
+      - "4090:4090"
+    networks:
+      - health-os-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:4090/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+  config-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: config-server
+    container_name: config-server
+    ports:
+      - "4080:4080"
+    environment:
+      - EUREKA_URL=http://service-discovery:4090/eureka
+    networks:
+      - health-os-net
+    depends_on:
+      service-discovery:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:4080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+  # ─── Edge ──────────────────────────────────────────────────
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: api-gateway
+    container_name: api-gateway
+    ports:
+      - "4000:4000"
+    environment:
+      - CONFIG_SERVER_URL=http://config-server:4080
+      - EUREKA_URL=http://service-discovery:4090/eureka
+      - SPRING_PROFILES_ACTIVE=docker
+    networks:
+      - health-os-net
+    depends_on:
+      config-server:
+        condition: service_healthy
+
+  # ─── Domain Services ──────────────────────────────────────
+
+  workout-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: workout-service
+    container_name: workout-service
+    ports:
+      - "4010:4010"
+    environment:
+      - CONFIG_SERVER_URL=http://config-server:4080
+      - EUREKA_URL=http://service-discovery:4090/eureka
+      - SPRING_PROFILES_ACTIVE=docker
+    networks:
+      - health-os-net
+    depends_on:
+      config-server:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  sleep-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: sleep-service
+    container_name: sleep-service
+    ports:
+      - "4020:4020"
+    environment:
+      - CONFIG_SERVER_URL=http://config-server:4080
+      - EUREKA_URL=http://service-discovery:4090/eureka
+      - SPRING_PROFILES_ACTIVE=docker
+    networks:
+      - health-os-net
+    depends_on:
+      config-server:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  nutrition-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: nutrition-service
+    container_name: nutrition-service
+    ports:
+      - "4030:4030"
+    environment:
+      - CONFIG_SERVER_URL=http://config-server:4080
+      - EUREKA_URL=http://service-discovery:4090/eureka
+      - SPRING_PROFILES_ACTIVE=docker
+    networks:
+      - health-os-net
+    depends_on:
+      config-server:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  supplement-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: supplement-service
+    container_name: supplement-service
+    ports:
+      - "4040:4040"
+    environment:
+      - CONFIG_SERVER_URL=http://config-server:4080
+      - EUREKA_URL=http://service-discovery:4090/eureka
+      - SPRING_PROFILES_ACTIVE=docker
+    networks:
+      - health-os-net
+    depends_on:
+      config-server:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  ai-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: ai-service
+    container_name: ai-service
+    ports:
+      - "4050:4050"
+    environment:
+      - CONFIG_SERVER_URL=http://config-server:4080
+      - EUREKA_URL=http://service-discovery:4090/eureka
+      - SPRING_PROFILES_ACTIVE=docker
+    networks:
+      - health-os-net
+    depends_on:
+      config-server:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+
+  # ─── Messaging (activate with: docker compose --profile messaging up) ──
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: healthos
+      RABBITMQ_DEFAULT_PASS: healthos
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - health-os-net
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    profiles:
+      - messaging
+
+networks:
+  health-os-net:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  mongo-data:
+  rabbitmq-data:
