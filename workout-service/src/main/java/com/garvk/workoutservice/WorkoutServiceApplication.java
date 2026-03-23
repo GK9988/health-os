@@ -5,11 +5,19 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 
+import java.util.TimeZone;
+
 @SpringBootApplication
 @EnableDiscoveryClient
 public class WorkoutServiceApplication {
 
     static{
+        // Fix deprecated timezone names for PostgreSQL 17+ compatibility
+        // (Windows may report "Asia/Calcutta" which PG17 no longer accepts)
+        if ("Asia/Calcutta".equals(TimeZone.getDefault().getID())) {
+            TimeZone.setDefault(TimeZone.getTimeZone("Asia/Kolkata"));
+        }
+
         Dotenv dotenv = Dotenv.configure().ignoreIfMissing().load();
         dotenv.entries().forEach(entry -> System.setProperty(entry.getKey(), entry.getValue()));
     }
