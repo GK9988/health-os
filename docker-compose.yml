@@ -1,5 +1,4 @@
 services:
-
   # ─── Databases ─────────────────────────────────────────────
 
   postgres:
@@ -22,24 +21,6 @@ services:
       retries: 5
       start_period: 10s
 
-  mongo:
-    image: mongo:8
-    container_name: mongo
-    ports:
-      - "27017:27017"
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: healthos
-      MONGO_INITDB_ROOT_PASSWORD: healthos
-    volumes:
-      - mongo-data:/data/db
-    networks:
-      - health-os-net
-    healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
 
   # ─── Infrastructure ────────────────────────────────────────
 
@@ -55,7 +36,11 @@ services:
     networks:
       - health-os-net
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:4090/actuator/health || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "curl -sf http://localhost:4090/actuator/health || exit 1",
+        ]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -78,7 +63,11 @@ services:
       service-discovery:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:4080/actuator/health || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "curl -sf http://localhost:4080/actuator/health || exit 1",
+        ]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -209,7 +198,7 @@ services:
     depends_on:
       config-server:
         condition: service_healthy
-      mongo:
+      postgres:
         condition: service_healthy
 
   # ─── Messaging (activate with: docker compose --profile messaging up) ──
@@ -242,5 +231,4 @@ networks:
 
 volumes:
   postgres-data:
-  mongo-data:
   rabbitmq-data:
